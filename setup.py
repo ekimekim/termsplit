@@ -7,5 +7,10 @@ setup(
 	author = "Mike Lang",
 	author_email = "mikelang3000@gmail.com",
 	packages = ['termsplit'],
+	install_requires = [
+		'gevent',
+		'inputdev',
+		'argh',
+	]
 	entry_points = {'console_scripts':['termsplit = termsplit.main:cli']},
 )
