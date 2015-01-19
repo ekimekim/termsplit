@@ -34,6 +34,7 @@ class KeyPresses(object):
 				self.enqueue(KEYCODES[event.code])
 		except Exception as ex:
 			self.enqueue(ex, exception=True)
+			raise
 		finally:
 			device.close()
 
