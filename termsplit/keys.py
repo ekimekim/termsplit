@@ -4,6 +4,8 @@ import gevent.pool
 
 from inputdev import InputDevice
 
+from termsplit.keycodes import KEYCODES
+
 
 KEYPRESS_EVENTS = {
 	'SPLIT': 'Begin timing, and mark each split',
