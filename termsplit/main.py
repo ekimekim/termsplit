@@ -4,6 +4,8 @@ import os
 
 from argh import EntryPoint, arg, confirm
 
+from termsplit.keys import KEYPRESS_EVENTS, KeyPresses
+
 
 cli = EntryPoint()
 
@@ -26,10 +28,9 @@ def configure(conf=None):
 			print
 			continue
 		raw_input("Press Enter when ready.")
-		iterator = get_key_presses() # we only capture presses after this line
+		iterator = KeyPresses() # we only capture presses after this line
 		print "Now press the button to bind."
-		key_code = iterator.next()
-		key_name = KEYCODES[key_code]
+		key_name = iterator.next()
 		config[event] = key_name
 		print "Bound {} to {}".format(event, key_name)
 		print
