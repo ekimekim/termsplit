@@ -11,6 +11,7 @@ setup(
 		'gevent',
 		'inputdev',
 		'argh',
+		'monotonic',
 	]
 	entry_points = {'console_scripts':['termsplit = termsplit.main:cli']},
 )
