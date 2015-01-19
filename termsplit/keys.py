@@ -1,10 +1,13 @@
 
 import gevent.queue
 import gevent.pool
+import gevent.monkey
 
 from inputdev import InputDevice
 
 from termsplit.keycodes import KEYCODES
+
+gevent.monkey.patch_all()
 
 
 KEYPRESS_EVENTS = {
