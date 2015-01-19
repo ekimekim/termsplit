@@ -1,5 +1,6 @@
 
 import json
+import os
 
 from argh import EntryPoint, arg, confirm
 
@@ -13,13 +14,13 @@ def configure(conf=None):
 	Default config is ~/.termsplit.json"""
 	if not conf:
 		conf = os.path.expanduser('~/.termsplit.json')
-	if os.path.exists(conffile):
-		with open(conffile) as f:
+	if os.path.exists(conf):
+		with open(conf) as f:
 			config = json.loads(f.read())
 	else:
 		config = {}
 
-	for event, descrption in KEYPRESS_EVENTS.items():
+	for event, description in KEYPRESS_EVENTS.items():
 		print '{}: {}'.format(event, description)
 		if event in config and confirm('Current value: {}. Keep this value'.format(config[event]), True):
 			print
@@ -47,6 +48,6 @@ def open(splitfile, conf=None):
 	"""Open the given splits file and bring up the main timer interface."""
 	if not conf:
 		conf = os.path.expanduser('~/.termsplit.json')
-	with open(conffile) as f:
+	with open(conf) as f:
 		config = json.loads(f.read())
 	# TODO
