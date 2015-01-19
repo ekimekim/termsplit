@@ -3,38 +3,59 @@ from monotonic import monotonic
 
 
 class Timer(object):
-	"""A stateful timer object that can be started, get the current time, and marked (see mark()).
+	"""A stateful timer object that can be started, paused, and marked (see mark()).
 	Cannot be stopped or reset - just make a new one.
 	Uses monotonic time.
 	"""
-	start_time = None
+	extra_time = 0 # extra_time is a base value to add to elapsed time, used to implement pause
+	paused = False
 
-	def __init__(self, start=False):
-		"""Optionally start timer immediately"""
-		if start:
-			self.start()
-
-	def start(self):
-		"""Begin the timer"""
+	def __init__(self):
 		self.start_time = monotonic()
-		self.mark_time = self.start_time
+		self.marks = [] # list of elapsed times that marks are made at - last entry is current mark
 
 	def get(self):
 		"""Return the time elapsed since start"""
-		if self.start_time is None:
-			raise ValueError("Timer is not started")
-		return monotonic() - self.start_time
+		elapsed, now = self._get()
+		return elapsed
+
+	def _get(self):
+		"""Retuns (elapsed since start, timestamp of when this elapsed time was retrieved)"""
+		now = monotonic()
+		elapsed = self.extra_time
+		if not self.paused:
+			elapsed += now - self.start_time
+		return elapsed, now
+
+	def pause(self):
+		"""Toggle between paused and unpaused"""
+		if self.paused:
+			self.start_time = monotonic()
+			self.paused = False
+		else:
+			self.extra_time = self.get()
+			self.paused = True
 
 	def mark(self, peek=False):
 		"""Marks the current time, and returns the elapsed time since the last mark.
 		If peek=True, return elapsed time without changing the mark."""
-		if self.start_time is None:
-			raise ValueError("Timer is not started")
-		now = monotonic()
-		elapsed = now - self.mark_time
+		elapsed = self.get()
+		old_mark = self.marks[-1] if self.marks else 0
+		since_mark = elapsed - old_mark
 		if not peek:
-			self.mark_time = now
-		return elapsed
+			self.marks.append(elapsed)
+		return since_mark
+
+	def unmark(self):
+		"""Undo the latest mark (if any), so the next mark will return the time since the previous mark.
+		Example:
+			t=1: start
+			t=2: mark (returns 1)
+			t=3: unmark
+			t=4: mark (returns 3)
+		"""
+		if self.marks:
+			self.marks.pop()
 
 
 def parse_time(data):
