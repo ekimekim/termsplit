@@ -34,6 +34,10 @@ class Splits(object):
 		if filepath:
 			self.loadfile(filepath)
 
+	def __iter__(self):
+		"""Iterate over rows (name, best time, time in best run)"""
+		return iter(self.splits)
+
 	def load(self, data):
 		for line in data.split('\n'):
 			line = line.strip()
@@ -49,7 +53,7 @@ class Splits(object):
 
 	def dump(self):
 		return '\n'.join("{}\t{}\t{}".format(name, format_time(best), format_time(time))
-		                 for name, best, time in self.splits)
+		                 for name, best, time in self)
 
 	def loadfile(self, filepath):
 		with open(filepath) as f:
