@@ -2,7 +2,7 @@
 import json
 import os
 
-from argh import EntryPoint, arg, confirm
+from argh import EntryPoint, arg, confirm, named
 
 from termsplit.keys import KEYPRESS_EVENTS, KeyPresses
 
@@ -11,9 +11,9 @@ cli = EntryPoint()
 
 
 @cli
+@arg('--conf', default=None, help='Config file to use, default ~/.termsplit.json')
 def configure(conf=None):
-	"""Interactive configuration setup. Conf file will be created if it doesn't exist.
-	Default config is ~/.termsplit.json"""
+	"""Interactive configuration setup. Conf file will be created if it doesn't exist."""
 	if not conf:
 		conf = os.path.expanduser('~/.termsplit.json')
 	if os.path.exists(conf):
@@ -44,8 +44,9 @@ def configure(conf=None):
 
 
 @cli
-@arg('--conf', help='Config file to use')
-def open(splitfile, conf=None):
+@arg('--conf', help='Config file to use, default ~/.termsplit.json')
+@named('open')
+def open_splits(splitfile, conf=None):
 	"""Open the given splits file and bring up the main timer interface."""
 	if not conf:
 		conf = os.path.expanduser('~/.termsplit.json')

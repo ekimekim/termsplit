@@ -1,4 +1,6 @@
 
+from collections import OrderedDict
+
 import gevent.queue
 import gevent.pool
 import gevent.monkey
@@ -10,13 +12,13 @@ from termsplit.keycodes import KEYCODES
 gevent.monkey.patch_all()
 
 
-KEYPRESS_EVENTS = {
-	'SPLIT': 'Begin timing, and mark each split',
-	'UNSPLIT': 'Undo the most recent split (no effect on first split)',
-	'SKIP': 'Skip a split without recording the time - useful if you forgot to split on time',
-	'PAUSE': 'Pause the timer, or resume a paused timer',
-	'STOP': 'Stop timing, saving any best times acquired in that run',
-}
+KEYPRESS_EVENTS = OrderedDict([
+	('SPLIT', 'Begin timing, and mark each split'),
+	('UNSPLIT', 'Undo the most recent split (no effect on first split)'),
+	('SKIP', 'Skip a split without recording the time - useful if you forgot to split on time'),
+	('PAUSE', 'Pause the timer, or resume a paused timer'),
+	('STOP', 'Stop timing, saving any best times acquired in that run'),
+])
 
 
 class KeyPresses(object):
