@@ -38,6 +38,14 @@ class Splits(object):
 		"""Iterate over rows (name, best time, time in best run)"""
 		return iter(self.splits)
 
+	def __eq__(self, other):
+		return isinstance(other, Splits) and other.splits == self.splits
+
+	def copy(self):
+		ret = Splits()
+		ret.load(self.dump())
+		return ret
+
 	def load(self, data):
 		for line in data.split('\n'):
 			line = line.strip()
@@ -64,3 +72,9 @@ class Splits(object):
 		data = self.dump()
 		with open(filepath, 'w') as f:
 			f.write(data + '\n')
+
+	def append(self, name, best, time):
+		self.splits.append((name, best, time))
+
+	def merge(self, new):
+		# TODO merge bests (keep better), merge full time if lengths match

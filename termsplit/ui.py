@@ -6,49 +6,84 @@ STDIN_KEYS = {
 	's': 'save',
 }
 
+CLEAR = '\x1b[H\x1b[2J'
+CLEAR_LINE = '\x1b[2K'
+
+class Quit(Exception):
+	pass
+
 
 class UI(object):
 	self.INTERVAL = 0.01 # time between updates
+	self.HEADER = ['Name', 'Seg Time', 'Time'] # column names
 
-	def __init__(self, config, splits):
+	def __init__(self, config, splits, filepath=None):
 		self.config = config
+		self.filepath = filepath
+
+		# splits is up-to-date splits, saved is what was last saved to file,
+		# results is this run (instead of best times), original is what to compare against
+		# (original updates from splits on run start)
 		self.splits = splits
+		self.saved = splits.copy()
+		self.results = None
+		self.original = None
+
 		self._group = gevent.pool.Group()
 		self._input_queue = gevent.queue.Queue()
+		self._output_lock = gevent.lock.RLock()
+		self.running = gevent.event.Event()
+		self.timer = None
 
 	def get_input(self):
 		"""Wait for an input from either global hotkeys or stdin, and return the associated action"""
-		return self._input_queue.get().get()
-
-	def _push_input(self, func):
-		def wrap(value):
-			wrapper = AsyncResult()
-			if isinstance(value, Exception):
-				wrapper.set_exception(value)
-			else:
-				wrapper.set(value)
-			return wrapper
-		try:
-			while True:
-				self._input_queue.put(wrap(func()))
-		except Exception as ex:
-			# push the error so get_input recieves it
-			self._input_queue.put(wrap(ex))
+		return self._input_queue.get()
 
 	def _read_stdin(self):
+		# TODO effects of stdin.read() on uses of raw_input() elsewhere
 		while True:
 			c = self.stdin.read(1)
 			if not c:
 				raise EOFError
 			if c in STDIN_KEYS:
-				return STDIN_KEYS[c]
+				self._input_queue.put(STDIN_KEYS[c])
 
 	def _read_hotkeys(self):
 		while True:
 			key = self.hotkeys.next()
 			reverse_config = {v: k for k, v in self.config}
 			if key in reverse_config:
-				return reverse_config[key]
+				self._input_queue.put(reverse_config[key])
+
+	def output_wrapper(self):
+		"""During timing, the state of the screen is somewhat tricky to manage.
+		Most of the time, the output loop will be updating the last line.
+		This context manager will (on enter) get the output lock (pausing output loop)
+		and go to the next line (so we're not writing on a half-written line),
+		and (on successful exit) clear the screen + re-write the previous lines (getting back into the state
+		that output loop expects)."""
+		class _output_wrapper(object):
+			def __enter__(self):
+				self._output_lock.acquire()
+				print
+			def __exit__(self, *exc_info):
+				if exc_info = (None, None, None):
+					self.clear()
+				self._output_lock.release()
+		return _output_wrapper()
+
+	def clear(self):
+		"""Clear the screen and re-write the preamble"""
+		sys.stdout.write(CLEAR) # goto (0,0) and clear screen
+		self.preamble()
+		sys.stdout.flush()
+
+	def compare(self, original, result):
+		"""Takes a best times row, and a results row, and returns a row describing the difference"""
+		# TODO
+
+	def get_compare_rows(self, results):
+		return map(self.compare, zip(self.original, results))
 
 	def main(self):
 		"""Run the main UI for the given splits.
@@ -59,36 +94,150 @@ class UI(object):
 		with TermAttrs.modify(exclude=(0,0,0,ECHO|ECHONL|ICANON)): # don't echo input, one-char-at-a-time
 			self.hotkeys = KeyPresses()
 			self.stdin = FileObject(sys.stdin)
-			self.timer = None
-			self._group.spawn(self._push_input, self._read_stdin)
-			self._group.spawn(self._push_input, self._read_hotkeys)
 
 			self.preamble()
+			sys.stdout.flush()
 
+			self._group.spawn(self._read_stdin)
+			self._group.spawn(self._read_hotkeys)
 			self._group.spawn(self.input_loop)
 			self._group.spawn(self.output_loop)
 
+			# raise if any greenlet fails
+			try:
+				gevent.pool.Group().map(lambda g: g.get(), self._group.greenlets)
+			except Quit:
+				with self._output_lock:
+					print
+					if self.saved != self.splits and confirm("Your splits have changed. Save them", default=True):
+						self.save()
+			finally:
+				self._group.kill()
+				print
+
 	def preamble(self):
 		print "Current times:"
-		self.print_splits()
+		self.print_splits(self.splits)
 		print
+		print
+		self.print_splits(self.get_compare_rows())
+		self.print_current()
 
-	def print_splits(self):
-		widths = self.get_widths()
+	def print_splits(self, rows):
+		widths = self.get_widths(rows)
 		self.print_header(widths)
-		for row in self.splits:
+		for row in rows:
 			self.print_row(widths, *row)
 
 	def print_header(self, widths):
-		"""Print header "Name   Seg Time   Time" but with padding to fit columns"""
-		print "{:<{widths[0]}}  {:<{widths[1]}}  {}".format("Name", "Seg Time", "Time", widths=widths)
+		"""Print header but with padding to fit columns"""
+		self.print_row(widths, *self.HEADER)
 
-	def print_row(self, widths, name, best, time, colors=(None, None)):
-		"""Print the given row with padding to fit columns.
-		Optional arg colors can assign terminal foreground colors (eg. '1' for red)
-		to best and time args respectively.
+	def get_current_row(self, split=False):
+		"""Return the times for the current row. If split=True, begin the next split.
+		(if splitting were a seperate operation, a small delay would be introduced between get() and mark())
 		"""
-		colors = ['\x1b[3{}m'.format(color) if color is not None else '' for color in colors]
-		print "{:<{widths[0]}}  {colors[0]}{:<{widths[1]}}{reset}  {colors[1]}{}{reset}".format(
-			name, best, time, widths=widths, colors=colors, reset='\x1b[m',
-		)
+		name, _, _ = self.splits[len(self.results)] # next split after the ones in results
+		return name, self.timer.mark(peek=not split), self.timer.get()
+
+	def print_current(self, current=None):
+		"""Print times for the current split based on self.timer.
+		Does NOT end with a newline."""
+		split = self.original[len(self.results)] # next split after the ones in results
+		if not current:
+			current = self.get_current_row()
+		widths = self.get_widths(self.get_compare_rows(self.results + [current]))
+		self.print_row(widths, self.compare(split, current), newline=newline)
+
+	def print_row(self, widths, name, best, time, newline=True):
+		"""Print the given row with padding to fit columns"""
+		if not isinstance(best, basestring):
+			best = format_time(best)
+		if not isinstance(time, basestring):
+			time = format_time(time)
+		sys.stdout.write("{:<{widths[0]}}  {:<{widths[1]}}  {}".format(name, best, time, widths=widths)
+		if newline:
+			sys.stdout.write('\n')
+
+	def save(self):
+		filepath = self.filepath
+		# we keep asking for a filepath until they cancel - this is safer than only giving them one try
+		with self._output_lock:
+			while True:
+				if not filepath:
+					try:
+						filepath = raw_input("Please enter file path to save to, or nothing to cancel: ")
+					except EOFError:
+						filepath = ''
+				if not filepath:
+					return # return without saving
+				try:
+					self.splits.savefile(self.filepath)
+				except (OSError, IOError) as ex:
+					print ex
+				else:
+					break
+		# remember the new save details
+		self.saved = self.splits.copy()
+		self.filepath = filepath
+
+	def help(self):
+		# TODO
+
+	def split(self):
+		if not self.timer:
+			if self.results:
+				# post-finish, do nothing (must hit reset to begin a new run)
+			else:
+				# start the clock!
+				self.results = Splits()
+				self.timer = Timer()
+				self.running.set()
+				return
+		# record the time for this split
+		with self._output_lock:
+			current = self.get_current_row(split=True)
+			# refresh current line to make sure it's up to date
+			sys.stdout.write(CLEAR_LINE)
+			self.print_current(current)
+			print # add a newline to begin next split's line
+			self.results.append(current)
+			if len(self.results) == len(self.splits):
+				# run over
+				self.finish()
+			else:
+				self.print_current() # now print the new split
+
+	def finish(self):
+		self.timer = None
+		self.running.clear()
+
+	def reset(self):
+		self.finish()
+		self.splits.merge(self.results)
+		self.results = None
+
+	def pause(self):
+		if not self.timer:
+			return # not started - do nothing
+		self.timer.pause() # toggle pause
+		if self.timer.paused:
+			self.running.clear()
+		else:
+			self.running.set()
+
+	def _output_loop(self):
+		while True:
+			self.running.wait()
+			with self._output_lock:
+				if not self.running.is_set():
+					# race cdn: we stopped running between running.wait() and now - do nothing
+					continue
+				# at this time we assume the cursor is at the end of print_current()/preamble()
+				# we clear the current line, and re-print it
+				sys.stdout.write(CLEAR_LINE)
+				self.print_current()
+				sys.stdout.flush()
+
+	def _input_loop(self):
+		# TODO
