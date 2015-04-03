@@ -134,7 +134,7 @@ class UI(object):
 			except Quit:
 				with self._output_lock:
 					print
-					if self.saved != self.splits and confirm("Your splits have changed. Save them", default=True):
+					if self.saved != self.splits:
 						self.save()
 			finally:
 				self._group.kill()
@@ -202,31 +202,12 @@ class UI(object):
 			gevent.sleep(self.MSG_DISPLAY_DELAY)
 
 	def _save(self):
-		filepath = self.filepath
-		# we keep asking for a filepath until they cancel - this is safer than only giving them one try
-		with self._output_lock:
-			while True:
-				if not filepath:
-					try:
-						filepath = raw_input("Please enter file path to save to, or nothing to cancel: ")
-					except EOFError:
-						filepath = ''
-				if not filepath:
-					return # return without saving
-				try:
-					self.splits.savefile(self.filepath)
-				except EnvironmentError as ex:
-					print ex
-					filepath = None # try entering different path
-				else:
-					break
+		self.splits.savefile(self.filepath)
 		# remember the new save details
 		self.saved = self.splits.copy()
-		self.filepath = filepath
 		print 'Saved to {}'.format(filepath)
 
 	def help(self):
-		print raw_input("blah")
 		pass # TODO
 
 	def split(self):
