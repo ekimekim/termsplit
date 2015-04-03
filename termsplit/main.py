@@ -5,6 +5,8 @@ import os
 from argh import EntryPoint, arg, confirm, named
 
 from termsplit.keys import KEYPRESS_EVENTS, KeyPresses
+from termsplit.ui import UI
+from termsplit.splits import Splits
 
 
 cli = EntryPoint()
@@ -52,4 +54,5 @@ def open_splits(splitfile, conf=None):
 		conf = os.path.expanduser('~/.termsplit.json')
 	with open(conf) as f:
 		config = json.loads(f.read())
-	# TODO
+	splits = Splits(splitfile)
+	UI(config, splits, splitfile).main()

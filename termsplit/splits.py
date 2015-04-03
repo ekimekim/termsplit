@@ -38,6 +38,9 @@ class Splits(object):
 		"""Iterate over rows (name, best time, time in best run)"""
 		return iter(self.splits)
 
+	def __getitem__(self, item):
+		return self.splits[item]
+
 	def __eq__(self, other):
 		return isinstance(other, Splits) and other.splits == self.splits
 
@@ -77,4 +80,4 @@ class Splits(object):
 		self.splits.append((name, best, time))
 
 	def merge(self, new):
-		# TODO merge bests (keep better), merge full time if lengths match
+		raise NotImplementedError # TODO merge bests (keep better), merge full time if lengths match
