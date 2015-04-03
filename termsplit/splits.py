@@ -44,6 +44,9 @@ class Splits(object):
 	def __eq__(self, other):
 		return isinstance(other, Splits) and other.splits == self.splits
 
+	def __len__(self):
+		return len(self.splits)
+
 	def copy(self):
 		ret = Splits()
 		ret.load(self.dump())

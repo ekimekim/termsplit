@@ -9,6 +9,7 @@ import gevent.queue
 from argh import confirm
 from gevent.fileobject import FileObject
 
+import gtools
 from termhelpers import TermAttrs
 
 from termsplit.timing import Timer, format_time
@@ -41,7 +42,7 @@ class UI(object):
 		# results is this run (instead of best times)
 		self.splits = splits
 		self.saved = splits.copy()
-		self.results = None # is None only before starting
+		self.results = None
 
 		self._group = gevent.pool.Group()
 		self._input_queue = gevent.queue.Queue()
@@ -64,7 +65,7 @@ class UI(object):
 	def _read_hotkeys(self):
 		while True:
 			key = self.hotkeys.next()
-			reverse_config = {v: k for k, v in self.config}
+			reverse_config = {v: k for k, v in self.config.items()}
 			if key in reverse_config:
 				self._input_queue.put(reverse_config[key])
 
@@ -129,7 +130,7 @@ class UI(object):
 
 			# raise if any greenlet fails
 			try:
-				gevent.pool.Group().map(lambda g: g.get(), self._group.greenlets)
+				gtools.get_first([g.get for g in self._group.greenlets])
 			except Quit:
 				with self._output_lock:
 					print
@@ -144,14 +145,15 @@ class UI(object):
 		self.print_splits(self.splits)
 		print
 		print
-		self.print_splits(self.get_compare_rows(self.results))
-		self.print_current()
+		if self.timer: # if started
+			self.print_splits(self.get_compare_rows(self.results))
+			self.print_current()
 
 	def get_widths(self, rows):
 		"""Given a list of rows, returns the max width for the first two columns."""
 		name_lens = []
 		best_lens = []
-		for name, best, time in rows:
+		for name, best, time in [self.HEADER] + list(rows):
 			if not isinstance(best, basestring):
 				best = format_time(best)
 			name_lens.append(len(name))
@@ -224,6 +226,7 @@ class UI(object):
 		print 'Saved to {}'.format(filepath)
 
 	def help(self):
+		print raw_input("blah")
 		pass # TODO
 
 	def split(self):
@@ -272,7 +275,7 @@ class UI(object):
 	def quit(self):
 		raise Quit
 
-	def _output_loop(self):
+	def output_loop(self):
 		while True:
 			self.running.wait()
 			with self._output_lock:
@@ -285,7 +288,7 @@ class UI(object):
 				self.print_current()
 				sys.stdout.flush()
 
-	def _input_loop(self):
+	def input_loop(self):
 		ACTION_MAP = {
 			'HELP': self.help,
 			'SAVE': self.save,
