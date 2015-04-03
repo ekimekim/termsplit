@@ -12,6 +12,8 @@ setup(
 		'inputdev',
 		'argh',
 		'monotonic',
+		'gtools',
+		'termhelpers',
 	],
 	entry_points = {'console_scripts':['termsplit = termsplit.main:cli']},
 )
