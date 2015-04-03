@@ -22,6 +22,7 @@ STDIN_KEYS = {
 	'h': 'HELP',
 	'q': 'QUIT',
 	's': 'SAVE',
+	'r': 'REDRAW',
 }
 
 CLEAR = '\x1b[H\x1b[2J'
@@ -286,6 +287,7 @@ class UI(object):
 			'HELP': self.help,
 			'SAVE': self.save,
 			'QUIT':	self.quit,
+			'REDRAW': self.clear,
 			'SPLIT': self.split,
 #			'UNSPLIT': self.unsplit, # TODO
 #			'SKIP': self.skip, # TODO
