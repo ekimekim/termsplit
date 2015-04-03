@@ -83,4 +83,14 @@ class Splits(object):
 		self.splits.append((name, best, time))
 
 	def merge(self, new):
-		raise NotImplementedError # TODO merge bests (keep better), merge full time if lengths match
+		for n, ((name, our_best, time), (_, their_best, _)) in enumerate(zip(self, new)):
+			if our_best is None or their_best < our_best:
+				self.splits[n] = name, their_best, time
+		if len(self) != len(new):
+			return # don't update times for incomplete splits
+		_, _, our_time = self[-1]
+		_, _, their_time = new[-1]
+		if our_time is not None and their_time >= our_time:
+			return # they didn't beat us
+		for n, ((name, best, _), (_, _, time)) in enumerate(zip(self, new)):
+			self.splits[n] = name, best, time

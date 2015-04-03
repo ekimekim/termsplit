@@ -208,14 +208,14 @@ class UI(object):
 		self.splits.savefile(self.filepath)
 		# remember the new save details
 		self.saved = self.splits.copy()
-		print 'Saved to {}'.format(filepath)
+		print 'Saved to {}'.format(self.filepath)
 
 	def help(self):
 		pass # TODO
 
 	def split(self):
 		if not self.timer:
-			if self.results:
+			if self.results is not None:
 				return # post-finish, do nothing (must hit reset to begin a new run)
 			self.start() # start the clock!
 			return
@@ -244,9 +244,12 @@ class UI(object):
 		self.running.clear()
 
 	def reset(self):
+		if self.results is None:
+			return # already reset
 		self.finish()
 		self.splits.merge(self.results)
 		self.results = None
+		self.clear()
 
 	def pause(self):
 		if not self.timer:
