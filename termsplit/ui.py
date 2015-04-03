@@ -140,6 +140,9 @@ class UI(object):
 			try:
 				gtools.get_first([g.get for g in self._group.greenlets])
 			finally:
+				if self.saved != self.splits:
+					print 'Exiting with unsaved changes! Dumping splitfile:'
+					print self.splits.dump()
 				self._group.kill()
 				print
 
@@ -149,7 +152,7 @@ class UI(object):
 		print
 		print
 		if self.timer: # if started
-			self.print_splits(self.get_compare_rows(self.results))
+			self.print_splits(self.get_compare_rows(self.results), min_widths=self.get_widths(self.splits))
 			self.print_current()
 
 	def get_widths(self, rows):
@@ -163,8 +166,9 @@ class UI(object):
 			best_lens.append(len(best))
 		return max(name_lens), max(best_lens)
 
-	def print_splits(self, rows):
+	def print_splits(self, rows, min_widths=(0,0)):
 		widths = self.get_widths(rows)
+		widths = map(max, zip(widths, min_widths))
 		self.print_header(widths)
 		for row in rows:
 			self.print_row(widths, *row)

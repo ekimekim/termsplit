@@ -80,9 +80,11 @@ def parse_time(data):
 def format_time(secs):
 	if secs is None:
 		return '' # None is empty string
-	if not (0 <= secs < float('inf')):
+	if not (float('-inf') <= secs < float('inf')):
 		# special cases: just stick with seconds
 		return "{:.3f}".format(secs)
+	if secs < 0:
+		return '-{}'.format(format_time(-secs))
 	hours, secs = int(secs / 3600), secs % 3600
 	mins, secs = int(secs / 60), secs % 60
 	ret = "{:02}:{:06.3f}".format(mins, secs)
