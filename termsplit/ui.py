@@ -1,8 +1,10 @@
 
 import sys
+import errno
 from termios import ECHO, ECHONL, ICANON
 
 import gevent.event
+import gevent.socket
 import gevent.lock
 import gevent.pool
 import gevent.queue
@@ -23,9 +25,9 @@ STDIN_KEYS = {
 }
 
 CLEAR = '\x1b[H\x1b[2J'
-CLEAR_LINE = '\x1b[2K'
+CLEAR_LINE = '\x1b[2K\x1b[G'
 
-class Quit(Exception):
+class Quit(gevent.GreenletExit):
 	pass
 
 
@@ -56,11 +58,18 @@ class UI(object):
 
 	def _read_stdin(self):
 		while True:
-			c = self.stdin.read(1)
-			if not c:
-				raise EOFError
-			if c in STDIN_KEYS:
-				self._input_queue.put(STDIN_KEYS[c])
+			try:
+				r, w, x = gevent.select.select([sys.stdin], [], [])
+			except EnvironmentError as ex:
+				if ex.errno != errno.EINTR:
+					raise
+				continue
+			if r:
+				c = sys.stdin.read(1)
+				if not c:
+					raise EOFError
+				if c in STDIN_KEYS:
+					self._input_queue.put(STDIN_KEYS[c])
 
 	def _read_hotkeys(self):
 		while True:
@@ -77,10 +86,10 @@ class UI(object):
 		and (on successful exit) clear the screen + re-write the previous lines (getting back into the state
 		that output loop expects)."""
 		class _output_wrapper(object):
-			def __enter__(self):
+			def __enter__(wrapper):
 				self._output_lock.acquire()
 				print
-			def __exit__(self, *exc_info):
+			def __exit__(wrapper, *exc_info):
 				if exc_info == (None, None, None):
 					self.clear()
 				self._output_lock.release()
@@ -94,8 +103,8 @@ class UI(object):
 
 	def compare(self, original, result):
 		"""Takes a best times row, and a results row, and returns a row describing the difference"""
-		compared = []
-		for o_time, r_time in zip(original, result):
+		compared = [result[0]] # start with Name from result
+		for o_time, r_time in zip(original, result)[1:]: # skip Name column
 			if r_time is None:
 				# r_time is None, no comparison
 				output = '-'
@@ -108,7 +117,7 @@ class UI(object):
 		return compared
 
 	def get_compare_rows(self, results):
-		return map(self.compare, zip(self.splits, results))
+		return [self.compare(original, result) for original, result in zip(self.splits, results)]
 
 	def main(self):
 		"""Run the main UI for the given splits.
@@ -118,9 +127,8 @@ class UI(object):
 		saving the splitfile or reconfiguring."""
 		with TermAttrs.modify(exclude=(0,0,0,ECHO|ECHONL|ICANON)): # don't echo input, one-char-at-a-time
 			self.hotkeys = KeyPresses()
-			self.stdin = FileObject(sys.stdin)
 
-			self.preamble()
+			self.clear()
 			sys.stdout.flush()
 
 			self._group.spawn(self._read_stdin)
@@ -128,14 +136,9 @@ class UI(object):
 			self._group.spawn(self.input_loop)
 			self._group.spawn(self.output_loop)
 
-			# raise if any greenlet fails
+			# raise if any greenlet fails, continue if Quit raised
 			try:
 				gtools.get_first([g.get for g in self._group.greenlets])
-			except Quit:
-				with self._output_lock:
-					print
-					if self.saved != self.splits:
-						self.save()
 			finally:
 				self._group.kill()
 				print
@@ -183,8 +186,8 @@ class UI(object):
 		split = self.splits[len(self.results)] # next split after the ones in results
 		if not current:
 			current = self.get_current_row()
-		widths = self.get_widths(self.get_compare_rows(self.results + [current]))
-		self.print_row(widths, self.compare(split, current), newline=False)
+		widths = self.get_widths(self.get_compare_rows(list(self.results) + [current]))
+		self.print_row(widths, *self.compare(split, current), newline=False)
 
 	def print_row(self, widths, name, best, time, newline=True):
 		"""Print the given row with padding to fit columns"""
@@ -223,7 +226,7 @@ class UI(object):
 			sys.stdout.write(CLEAR_LINE)
 			self.print_current(current)
 			print # add a newline to begin next split's line
-			self.results.append(current)
+			self.results.append(*current)
 			if len(self.results) == len(self.splits):
 				# run over
 				self.finish()
@@ -234,6 +237,7 @@ class UI(object):
 		self.results = Splits()
 		self.timer = Timer()
 		self.running.set()
+		self.clear()
 
 	def finish(self):
 		self.timer = None
@@ -268,6 +272,7 @@ class UI(object):
 				sys.stdout.write(CLEAR_LINE)
 				self.print_current()
 				sys.stdout.flush()
+			gevent.sleep(self.INTERVAL)
 
 	def input_loop(self):
 		ACTION_MAP = {
