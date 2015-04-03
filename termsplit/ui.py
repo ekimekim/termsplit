@@ -38,12 +38,10 @@ class UI(object):
 		self.filepath = filepath
 
 		# splits is up-to-date splits, saved is what was last saved to file,
-		# results is this run (instead of best times), original is what to compare against
-		# (original updates from splits on run start)
+		# results is this run (instead of best times)
 		self.splits = splits
 		self.saved = splits.copy()
 		self.results = None # is None only before starting
-		self.original = None
 
 		self._group = gevent.pool.Group()
 		self._input_queue = gevent.queue.Queue()
@@ -109,7 +107,7 @@ class UI(object):
 		return compared
 
 	def get_compare_rows(self, results):
-		return map(self.compare, zip(self.original, results))
+		return map(self.compare, zip(self.splits, results))
 
 	def main(self):
 		"""Run the main UI for the given splits.
@@ -180,7 +178,7 @@ class UI(object):
 	def print_current(self, current=None):
 		"""Print times for the current split based on self.timer.
 		Does NOT end with a newline."""
-		split = self.original[len(self.results)] # next split after the ones in results
+		split = self.splits[len(self.results)] # next split after the ones in results
 		if not current:
 			current = self.get_current_row()
 		widths = self.get_widths(self.get_compare_rows(self.results + [current]))
@@ -250,7 +248,6 @@ class UI(object):
 
 	def start(self):
 		self.results = Splits()
-		self.original = self.splits.copy()
 		self.timer = Timer()
 		self.running.set()
 
