@@ -168,9 +168,12 @@ class UI(object):
 			best_lens.append(len(best))
 		return max(name_lens), max(best_lens)
 
+	def combine_widths(self, *widths):
+		return map(max, zip(*widths))
+
 	def print_splits(self, rows, min_widths=(0,0)):
 		widths = self.get_widths(rows)
-		widths = map(max, zip(widths, min_widths))
+		widths = self.combine_widths(widths, min_widths)
 		self.print_header(widths)
 		for row in rows:
 			self.print_row(widths, *row)
@@ -193,6 +196,7 @@ class UI(object):
 		if not current:
 			current = self.get_current_row()
 		widths = self.get_widths(self.get_compare_rows(list(self.results) + [current]))
+		widths = self.combine_widths(widths, self.get_widths(self.splits))
 		self.print_row(widths, *self.compare(split, current), newline=False)
 
 	def print_row(self, widths, name, best, time, newline=True):
