@@ -296,4 +296,6 @@ class UI(object):
 		}
 		while True:
 			action = self.get_input()
+			if action not in ACTION_MAP:
+				continue # unimplemented
 			ACTION_MAP[action]()
