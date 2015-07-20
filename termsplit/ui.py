@@ -142,6 +142,7 @@ class UI(object):
 				gtools.get_first([g.get for g in self._group.greenlets])
 			finally:
 				if self.saved != self.splits:
+					print
 					print 'Exiting with unsaved changes! Dumping splitfile:'
 					print self.splits.dump()
 				self._group.kill()
