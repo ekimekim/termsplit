@@ -221,7 +221,18 @@ class UI(object):
 		print 'Saved to {}'.format(self.filepath)
 
 	def help(self):
-		pass # TODO
+		with self.output_wrapper():
+			print "Help:"
+			for key, action in STDIN_KEYS.items():
+				print "\t{}: {}".format(key, action)
+			for action, key in self.config.items():
+				print "\t{}: [global] {}".format(key, action)
+			(help_key,) = [key for key, action in STDIN_KEYS.items() if action == "HELP"]
+			print "Press {} again to dismiss".format(help_key)
+			# Block until any input.
+			# If it's another HELP, consume it. Otherwise leave it for the main input loop.
+			if self._input_queue.peek() == "HELP":
+				self.get_input()
 
 	def split(self):
 		if not self.timer:
