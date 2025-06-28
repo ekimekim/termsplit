@@ -82,6 +82,9 @@ class Splits(object):
 	def append(self, name, best, time):
 		self.splits.append((name, best, time))
 
+	def pop(self):
+		return self.splits.pop()
+
 	def merge(self, new):
 		for n, ((name, our_best, time), (_, their_best, _)) in enumerate(zip(self, new)):
 			if our_best is None or their_best < our_best:

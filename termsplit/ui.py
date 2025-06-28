@@ -254,6 +254,30 @@ class UI(object):
 			else:
 				self.print_current() # now print the new split
 
+	def unsplit(self):
+		if not self.timer:
+			return # not running, do nothing
+		if len(self.results) == 0:
+			return # can't unsplit the first split
+		self.timer.unmark()
+		self.results.pop()
+		self.clear()
+
+	def skip(self):
+		if not self.timer:
+			return # not running, do nothing
+		if len(self.results) == len(self.splits) - 1:
+			return # can't skip final split
+		with self._output_lock:
+			# replace current line with empty
+			name, _, _ = self.get_current_row()
+			current = (name, None, None)
+			sys.stdout.write(CLEAR_LINE)
+			self.print_current(current)
+			self.results.append(*current)
+			print # next line for next split
+			self.print_current()
+
 	def start(self):
 		self.results = Splits()
 		self.timer = Timer()
@@ -305,8 +329,8 @@ class UI(object):
 			'QUIT':	self.quit,
 			'REDRAW': self.clear,
 			'SPLIT': self.split,
-#			'UNSPLIT': self.unsplit, # TODO
-#			'SKIP': self.skip, # TODO
+			'UNSPLIT': self.unsplit,
+			'SKIP': self.skip,
 			'PAUSE': self.pause,
 			'STOP': self.reset,
 		}
