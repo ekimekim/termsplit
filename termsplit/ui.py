@@ -8,8 +8,6 @@ import gevent.socket
 import gevent.lock
 import gevent.pool
 import gevent.queue
-from argh import confirm
-from gevent.fileobject import FileObject
 
 import gtools
 from termhelpers import TermAttrs
@@ -34,7 +32,8 @@ class Quit(gevent.GreenletExit):
 
 class UI(object):
 	INTERVAL = 0.01 # time between updates
-	HEADER = ['Name', 'Seg Time', 'Time'] # column names
+	HEADER = ['Name', 'Seg Time', 'Best Seg', 'PB Seg', 'Time', 'PB Time'] # column names
+	SPLITS_HEADER = ['Name', 'Best Seg', 'PB Time']
 	MSG_DISPLAY_DELAY = 0.5 # How long to pause output to let a message display before clearing
 
 	def __init__(self, config, splits, filepath=None):
@@ -102,23 +101,33 @@ class UI(object):
 		self.preamble()
 		sys.stdout.flush()
 
-	def compare(self, original, result):
-		"""Takes a best times row, and a results row, and returns a row describing the difference"""
-		compared = [result[0]] # start with Name from result
-		for o_time, r_time in zip(original, result)[1:]: # skip Name column
+	def compare(self, split_index, result):
+		"""Takes a splits row, and a results row, and returns a row describing the difference"""
+		name, best_seg, pb_time = self.splits[split_index]
+		pb_seg = self.splits.best_run_segment_time(split_index)
+		_, result_seg, result_time = result
+
+		def diff(o_time, r_time):
 			if r_time is None:
 				# r_time is None, no comparison
-				output = '-'
+				return '-'
 			elif o_time is None:
 				# if original is None, return (result)
-				output = '({})'.format(format_time(r_time))
+				return '({})'.format(format_time(r_time))
 			else:
-				output = r_time - o_time
-			compared.append(output)
-		return compared
+				return r_time - o_time
+
+		return [
+			name,
+			result_seg,
+			diff(best_seg, result_seg),
+			diff(pb_seg, result_seg),
+			result_time,
+			diff(pb_time, result_time),
+		]
 
 	def get_compare_rows(self, results):
-		return [self.compare(original, result) for original, result in zip(self.splits, results)]
+		return [self.compare(idx, result) for idx, result in enumerate(results)]
 
 	def main(self):
 		"""Run the main UI for the given splits.
@@ -150,37 +159,40 @@ class UI(object):
 
 	def preamble(self):
 		print "Current times:"
-		self.print_splits(self.splits)
+		self.print_splits()
 		print
 		print
 		if self.timer: # if started
-			self.print_splits(self.get_compare_rows(self.results), min_widths=self.get_widths(self.splits))
+			self.print_results(self.get_compare_rows(self.results))
 			self.print_current()
 
-	def get_widths(self, rows):
+	def get_widths(self, header, rows, min_widths=None):
 		"""Given a list of rows, returns the max width for the first two columns."""
-		name_lens = []
-		best_lens = []
-		for name, best, time in [self.HEADER] + list(rows):
-			if not isinstance(best, basestring):
-				best = format_time(best)
-			name_lens.append(len(name))
-			best_lens.append(len(best))
-		return max(name_lens), max(best_lens)
+		rows = [self.convert_row(row) for row in rows]
+		longest = list(min_widths) if min_widths is not None else [0 for _ in header]
+		for row in [header] + list(rows):
+			longest = [max(a, len(b)) for a, b in zip(longest, row)]
+		return longest
 
-	def combine_widths(self, *widths):
-		return map(max, zip(*widths))
+	def get_result_widths(self, rows):
+		all_equal = [self.compare(idx, split) for idx, split in enumerate(self.splits)]
+		min_widths = self.get_widths(self.HEADER, all_equal)
+		return self.get_widths(self.HEADER, rows, min_widths)
 
-	def print_splits(self, rows, min_widths=(0,0)):
-		widths = self.get_widths(rows)
-		widths = self.combine_widths(widths, min_widths)
-		self.print_header(widths)
+	def convert_row(self, row):
+		return [v if isinstance(v, str) else format_time(v) for v in row]
+
+	def print_splits(self):
+		widths = self.get_widths(self.SPLITS_HEADER, self.splits)
+		self.print_row(widths, self.SPLITS_HEADER)
+		for row in self.splits:
+			self.print_row(widths, row)
+
+	def print_results(self, rows):
+		widths = self.get_result_widths(rows)
+		self.print_row(widths, self.HEADER)
 		for row in rows:
-			self.print_row(widths, *row)
-
-	def print_header(self, widths):
-		"""Print header but with padding to fit columns"""
-		self.print_row(widths, *self.HEADER)
+			self.print_row(widths, row)
 
 	def get_current_row(self, split=False):
 		"""Return the times for the current row. If split=True, begin the next split.
@@ -192,22 +204,22 @@ class UI(object):
 	def print_current(self, current=None):
 		"""Print times for the current split based on self.timer.
 		Does NOT end with a newline."""
-		split = self.splits[len(self.results)] # next split after the ones in results
+		split_index = len(self.results) # next split after the ones in results
 		if not current:
 			current = self.get_current_row()
-		widths = self.get_widths(self.get_compare_rows(list(self.results) + [current]))
-		widths = self.combine_widths(widths, self.get_widths(self.splits))
-		self.print_row(widths, *self.compare(split, current), newline=False)
+		widths = self.get_result_widths(self.get_compare_rows(list(self.results) + [current]))
+		self.print_row(widths, self.compare(split_index, current), newline=False)
 
-	def print_row(self, widths, name, best, time, newline=True):
+	def print_row(self, widths, row, newline=True):
 		"""Print the given row with padding to fit columns"""
-		if not isinstance(best, basestring):
-			best = format_time(best)
-		if not isinstance(time, basestring):
-			time = format_time(time)
-		sys.stdout.write("{:<{widths[0]}}  {:<{widths[1]}}  {}".format(name, best, time, widths=widths))
+		row = self.convert_row(row)
+		row = "  ".join(
+			"{value:<{width}}".format(width=width, value=value)
+			for width, value in zip(widths, row)
+		)
 		if newline:
-			sys.stdout.write('\n')
+			row += "\n"
+		sys.stdout.write(row)
 
 	def save(self):
 		with self.output_wrapper():

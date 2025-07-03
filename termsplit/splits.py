@@ -52,6 +52,17 @@ class Splits(object):
 		ret.load(self.dump())
 		return ret
 
+	def best_run_segment_time(self, index):
+		"""Get the segment time for the given segment index of the best run"""
+		_, _, end_time = self[index]
+		if index == 0:
+			start_time = 0
+		else:
+			_, _, start_time = self[index - 1]
+		if start_time is None or end_time is None:
+			return None
+		return end_time - start_time
+
 	def load(self, data):
 		for line in data.split('\n'):
 			line = line.strip()
